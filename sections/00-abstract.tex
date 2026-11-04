@@ -1,0 +1,13 @@
+\textit{
+    Recent advances in text-to-SQL, particularly on challenging benchmarks such as BIRD, are dominated by one-fits-all pipelines: 
+    every natural-language question—regardless of its difficulty—is processed by the same elaborate workflow of schema retrieval, 
+    decomposition, multi-candidate generation, iterative repair and selection. Since single-pass generation remains unreliable on 
+    complex questions, state-of-the-art systems increasingly rely on test-time scaling—sampling many candidates or invoking 
+    multiple collaborating agents—to secure accuracy gains.
+    This strategy incurs significant waste in cost and latency. We present **DataGallery-Text2SQL**, a text-to-SQL system built on 
+    two complementary ideas. 
+    First, a *routing strategy* estimates the difficulty of each incoming question and dispatches it to appropriate execution 
+    paths, reserving expensive scaled inference for the questions in need. Second, a \bf{self-evolving checker} automatically 
+    generates and continually improves SQL verification criteria from execution feedback, replacing hand-crafted candidate-selection heuristics.
+}
+
