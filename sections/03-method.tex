@@ -1,4 +1,111 @@
 \section{Method}
 \label{sec:method}
-\textit{TODO: Describe the approach, its key components, and the
-technical reasoning behind the design.}
+
+\subsection{Overview}
+\label{sec:overview}
+
+Given a natural-language question $Q$ and a target database $D$, text-to-SQL aims
+to produce a query $S^{*}$ that executes on $D$ and returns the correct result set.
+LLM-based solutions largely adopt a one-fits-all pipeline, applying the same
+procedure to every question and raising accuracy by sampling many SQL candidates
+for selection. This scaling has diminishing returns: accuracy gains flatten as the
+sample count grows, while token and latency costs, even for simple questions, rise
+sharply. \systemname{} replaces this indiscriminate scaling with two mechanisms:
+difficulty-conditioned dynamic routing and self-evolving validation.
+
+\paragraph{Difficulty-Conditioned Dynamic Routing.}
+Routing configures three modules of the pipeline. A difficulty probe $d(Q)$ determines
+(i) which recall paths Schema Linking activates and the schema tier it yields,
+(ii) which generation paths Generator activates, and (iii) how many candidate clusters
+the Selector chooses among. Routing tailors the candidate pool to difficulty: simple
+questions get a compact pool that needs no broad exploration, moderate questions a pool
+whose exploration range widens to cover plausible solutions, and challenging questions
+a pool from which obviously wrong candidates are filtered before it reaches the
+selector.
+
+\paragraph{Self-Evolving Validation.}
+Validation starts from two coarse checks, syntax validity and result equivalence, and
+is then refined by an agent-driven loop. Each round executes the current pipeline on a
+development set, classifies the resulting errors into fixed, broken, and unchanged
+cases, distills general error scenarios and writing conventions from them, and revises
+the detector conditions and repair instructions of the checkers as well as the
+constraints imposed on generation. Compliance drift of the underlying model thus turns
+from a manual maintenance burden into a recurring optimization task, and the same loop
+can be replayed to adapt the system to another database.
+
+Figure~\ref{fig:overview} presents the framework in two complementary views. The
+execution view (right) describes the online path of a single request: Schema Linking
+retrieves and trims the relevant tables and columns, Generator produces candidate SQL
+through several reasoning paths in parallel, Validator detects and repairs the
+candidates, and Selector returns the final query $S^{*}$. The development view (left)
+describes how the rules used by that path are produced. An offline semantic modeling
+pass, run once per database and shared by both views, builds a question-independent
+semantic layer---column descriptions, value enumerations and vectors, a JOIN graph, and
+historical SQL examples---that every query on that database reuses.
+
+The remainder of this section details the five components and the two mechanisms.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/figure1.pdf}
+\Description{Two side-by-side panels. The left panel is the development view, a six-step
+self-evolution loop that starts from a fixed development configuration and repeatedly
+classifies checker outcomes, mines error scenarios, evolves generator and validator
+rules, and re-runs the pipeline. The right panel is the execution view, where a
+difficulty probe routes a question through semantic modeling, schema linking, multi-path
+generation, a self-evolving checker chain, and a dynamic Top-K selector. A routing table
+beneath the panels lists the schema tier, generation paths, and Top-K per difficulty level.}
+\caption{Overview of \systemname{}.}
+\label{fig:overview}
+\end{figure*}
+
+\subsection{Semantic Modeling}
+\label{sec:semantic-modeling}
+
+\begin{zhoutline}
+\begin{itemize}
+\item 介绍：为避免运行时探查的 token 与时延开销，离线一次性构建 LLM 友好的语义层，包括表列描述、值枚举与向量、JOIN 图与历史 SQL 示例，写入混合检索系统供全库复用。
+\end{itemize}
+\end{zhoutline}
+
+\subsection{Multi-Path Dynamic Schema Linking}
+\label{sec:schema-linking}
+
+\begin{zhoutline}
+\begin{itemize}
+\item 介绍：七条互补召回回路（列名语义、列名 LLM、列值 LSH、枚举值语义、列值向量、SQL 反向提取、JOIN 图扩展），召回前由 Perceptor 拆词并区分 fuzz-match 与 evidence-match。
+\item 实验依据：在 Dev 上做 127 种开关组合的排列实验，提炼 Recall-first、Balanced、Precision-first 三档，外加 Full-schema 兜底；召回结果统一组织为 DDL 语义格式。
+\end{itemize}
+\end{zhoutline}
+
+\subsection{Difficulty-Routed Multi-Path Generation}
+\label{sec:generation}
+
+\begin{zhoutline}
+\begin{itemize}
+\item 介绍：四条异构回路（ICL、分治、骨架、自由探索），借鉴 N-version programming，多样性来自推理范式而非同一过程的多次采样。
+\item 公式（式 1）：难度映射为「schema 档位 + 回路集合」二元组；难度信号可取数据集标注或草稿 SQL 的结构复杂度。
+\item 算法（算法 2）：两阶段生成，阶段一每路 3 条且结果一致即短路，否则补齐至 5 条。
+\end{itemize}
+\end{zhoutline}
+
+\subsection{Self-Evolving Validator Chain}
+\label{sec:validator}
+
+\begin{zhoutline}
+\begin{itemize}
+\item 介绍：把校验外化为确定性 Checker 链，一头一尾为语法与执行结果校验，中间按子句与语义场景串行扩充，命中即给指令、由 LLM 定向修复。
+\item 公式（式 2、式 3）：演进算子依据 Fixed、Broke、KeptW、KeptR 四类统计，收紧或放宽检测谓词、细化修复指令，或派生新 Checker。
+\item 算法（算法 3）：单目标串行迭代，修改需通过全量 NoRegression 回归方可生效。
+\end{itemize}
+\end{zhoutline}
+
+\subsection{Dynamic Top-K Selector}
+\label{sec:selector}
+
+\begin{zhoutline}
+\begin{itemize}
+\item 介绍：8B 概率选择器，候选先按执行结果聚类，仅在 Top-K 个簇代表上打分；单簇占满时短路，零模型调用。
+\item 公式（式 4、式 5）：给出选择规则，并把 K 与回路组合绑定，四路全开取 3，不含自由探索取 2。
+\end{itemize}
+\end{zhoutline}

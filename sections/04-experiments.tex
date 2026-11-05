@@ -1,4 +1,22 @@
 \section{Experimental Evaluation}
 \label{sec:experiments}
-\textit{TODO: Define research questions, datasets, baselines, metrics,
-experimental settings, main results, and ablation studies.}
+
+\begin{zhoutline}
+\textit{Placeholder outline in Chinese; to be rewritten in English.}
+
+\begin{itemize}
+\item 设置：BIRD 基准，主结果取 Test 榜单，其余实验在 Dev 1534 题上完成；生成端统一 GLM-5.2，
+召回指标由 DeepSeek-V4-flash 产出；准确率以 EX 计，前置环节用召回指标、Oracle Q\% 与 Top-1 衡量；
+各节按控制变量设计，一次只变一个组件。
+\item 研究问题：RQ1 相对 SOTA 的表现，RQ2 各模块贡献，RQ3 各召回回路与档位，RQ4 固定路由下多回路生成，
+RQ5 自演进校验链，RQ6 Top-K 对选择精度的影响。
+\item 4.1 主结果（RQ1）：Test 集 EX 82.39\%、R-VES 77.64\%，双榜第一，Dev 78.10\% 亦居首。
+\item 4.2 编号待补：原稿从 4.1 跳到 4.3，正式稿需连续编号，此处可放成本与调用量分析。
+\item 4.3 模块消融（RQ2）：逐一移除六个模块，合计约 9.7 个百分点，说明增益来自架构协同。
+\item 4.4 Schema Linking（RQ3）：127 种回路组合评测，给出四档的召回与精度权衡，及动态路由的端到端收益。
+\item 4.5 多回路生成（RQ4）：四条回路独立表现与三组组合的分难度结果，为难度路由提供依据。
+\item 4.6 校验链消融（RQ5）：无校验、演进前、演进后三档对比，Top-1 EX 由 72.49\% 升至 73.47\%。
+\item 4.7 Top-K 选择（RQ6）：最优 K 随回路组合变化，支持将 Top-K 与候选来源绑定。
+\item 4.8 小结：主结果、路由依据与校验收益三点收束。
+\end{itemize}
+\end{zhoutline}

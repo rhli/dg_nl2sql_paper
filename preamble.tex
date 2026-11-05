@@ -1,3 +1,15 @@
 % acmart already loads amsmath, booktabs, graphicx, and hyperref.
 % Add shared commands and ACM-approved packages here as needed.
-\newcommand{\systemname}{\textsc{SystemName}}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+
+\newcommand{\systemname}{DataGallery-Text2SQL}
+
+% 草稿期的中文占位大纲；定稿前删除本段并移除各节的 zhoutline 环境。
+\usepackage{CJKutf8}
+\newenvironment{zhoutline}{%
+  \begin{CJK}{UTF8}{gbsn}%
+  \small\raggedright\setlength{\emergencystretch}{2em}%
+}{%
+  \end{CJK}%
+}
