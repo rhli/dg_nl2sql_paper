@@ -7,43 +7,42 @@
 Given a natural-language question $Q$ and a target database $D$, text-to-SQL aims
 to produce a query $S^{*}$ that executes on $D$ and returns the correct result set.
 LLM-based solutions largely adopt a one-fits-all pipeline, applying the same
-procedure to every question and raising accuracy by sampling many SQL candidates
-for selection. This scaling has diminishing returns: accuracy gains flatten as the
-sample count grows, while token and latency costs, even for simple questions, rise
-sharply. \systemname{} replaces this indiscriminate scaling with two mechanisms:
+procedure to every question and raising accuracy by sampling many SQL candidates for
+selection. This scaling exhibits diminishing returns: accuracy gains flattern as the
+sample count grows, whereas token and latency costs increase markedly even for simple
+questions. \systemname{} replaces this indiscriminate scaling with two mechanisms:
 difficulty-conditioned dynamic routing and self-evolving validation.
 
 \paragraph{Difficulty-Conditioned Dynamic Routing.}
-Routing configures three modules of the pipeline. A difficulty probe $d(Q)$ determines
-(i) which recall paths Schema Linking activates and the schema tier it yields,
-(ii) which generation paths Generator activates, and (iii) how many candidate clusters
-the Selector chooses among. Routing tailors the candidate pool to difficulty: simple
-questions get a compact pool that needs no broad exploration, moderate questions a pool
-whose exploration range widens to cover plausible solutions, and challenging questions
-a pool from which obviously wrong candidates are filtered before it reaches the
-selector.
+Routing configures three modules of the pipeline according to a difficulty probe
+$d(Q)$: (i) which recall paths Schema Linking activates, (ii) which generation paths
+Generator activates, and (iii) how many candidate clusters the Selector chooses among.
+The candidate pool therefore varies with difficulty: simple questions receive a compact
+pool without broad exploration, moderate questions a pool whose exploration range spans
+plausible solutions, and challenging questions a pool generated only from the most
+reasoning-intensive paths.
 
 \paragraph{Self-Evolving Validation.}
-Validation starts from two coarse checks, syntax validity and result equivalence, and
-is then refined by an agent-driven loop. Each round executes the current pipeline on a
-development set, classifies the resulting errors into fixed, broken, and unchanged
-cases, distills general error scenarios and writing conventions from them, and revises
-the detector conditions and repair instructions of the checkers as well as the
-constraints imposed on generation. Compliance drift of the underlying model thus turns
-from a manual maintenance burden into a recurring optimization task, and the same loop
-can be replayed to adapt the system to another database.
+We design validation as a chain of checkers, so that an RSI agent can evolve any single
+checker independently against one error type or a scenario preference; in combination,
+the chain covers the whole scenario and all common error types. Two generic checkers
+anchor both ends of the chain, verifying syntax validity and execution results, while
+the RSI agent extends or modifies the intermediate checkers in the overall evolution loop.
+Each iteration revises one checker, re-executes the pipeline on the development set, and
+analyzes the resulting errors to direct the next revision. Discovery and resolution of
+these issues thus no longer require manual analysis, which facilitates migration to a new
+application scenario.
 
 Figure~\ref{fig:overview} presents the framework in two complementary views. The
 execution view (right) describes the online path of a single request: Schema Linking
-retrieves and trims the relevant tables and columns, Generator produces candidate SQL
-through several reasoning paths in parallel, Validator detects and repairs the
-candidates, and Selector returns the final query $S^{*}$. The development view (left)
-describes how the rules used by that path are produced. An offline semantic modeling
-pass, run once per database and shared by both views, builds a question-independent
-semantic layer---column descriptions, value enumerations and vectors, a JOIN graph, and
-historical SQL examples---that every query on that database reuses.
+retrieves the relevant tables and columns, Generator produces candidate SQL through
+multiple reasoning paths in parallel, Validator detects and repairs the candidates, and
+Selector returns the final query $S^{*}$. The development view (left) describes how the
+guidelines used by Generator and Validator are produced. An offline semantic modeling
+pass, run once per database and shared by both views, builds the semantic layer that
+every query on that database reuses.
 
-The remainder of this section details the five components and the two mechanisms.
+The following subsections describe the principal modules and mechanisms of the framework.
 
 \begin{figure*}[t]
 \centering
