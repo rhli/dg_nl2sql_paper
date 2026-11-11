@@ -3,6 +3,34 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc}
 
+% DDL listings: wrap long lines and box the block, following the schema boxes
+% used in related papers. The listing itself sits in a full-width float.
+\usepackage{listings}
+\setlength{\textfloatsep}{8pt plus 2pt minus 4pt}
+\setlength{\dbltextfloatsep}{8pt plus 2pt minus 4pt}
+% 两个双栏浮动体上下相邻时（如 Figure 1 与 Table 1），默认 12pt 会让两条
+% caption 几乎贴在一起，故拉开到 18pt。
+\setlength{\dblfloatsep}{18pt plus 2pt minus 2pt}
+\lstset{
+  basicstyle=\linespread{0.82}\ttfamily\scriptsize,
+  columns=fixed,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=false,
+  breakindent=0pt,
+  showstringspaces=false,
+  upquote=true,
+  frame=single,
+  rulecolor=\color{gray!60},
+  backgroundcolor=\color{gray!6},
+  framexleftmargin=3pt,
+  framexrightmargin=3pt,
+  framextopmargin=0pt,
+  framexbottommargin=0pt,
+  aboveskip=1pt,
+  belowskip=1pt
+}
+
 \newcommand{\systemname}{DataGallery-Text2SQL}
 
 % 草稿期的中文占位大纲；定稿前删除本段并移除各节的 zhoutline 环境。

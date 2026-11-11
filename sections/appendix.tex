@@ -1,0 +1,78 @@
+\section{An Example of the DDL Semantic Format}
+\label{app:ddl}
+
+\begin{figure*}[!t]
+\centering
+\begin{lstlisting}
+CREATE TABLE frpm (
+  `CDSCode` TEXT, -- COMMENT "CDS code. Examples: ['01100170109835', '01100170112607', '01100170118489']"
+  `District Code` INTEGER, -- COMMENT "district code. Matched values: ['61333']. Examples: ['10017', '31609']"
+  `School Code` TEXT, -- COMMENT "school code. Examples: ['0109835', '0112607', '0118489']"
+  `District Name` TEXT, -- COMMENT "district name. Matched values: ['National Elementary', 'Center Joint Unified', 'Orange Center']"
+  `School Name` TEXT, -- COMMENT "school name. Matched values: ['Special Education', 'Center Middle', 'District Office']"
+  `District Type` TEXT, -- COMMENT "district type. Matched values: ['Unified School District', 'High School District', 'State Special Schools']"
+  `School Type` TEXT, -- COMMENT "school type. Matched values: ['Special Education Schools (Public)', 'State Special Schools', 'District Community Day Schools']"
+  `Educational Option Type` TEXT, -- COMMENT "educational option type. Matched values: ['District Special Education Consortia School', 'Special Education School', 'State Special School']"
+  `NSLP Provision Status` TEXT, -- COMMENT "National School Lunch Program provision status. Matched values: ['Provision 1', 'Provision 3', 'Provision 2']"
+  `Charter School Number` TEXT, -- COMMENT "charter school number. Matched values: ['0616', '0613', '0660']"
+  `Low Grade` TEXT, -- COMMENT "low grade. Matched values: ['6', 'Adult', '1']"
+  `High Grade` TEXT, -- COMMENT "high grade. Matched values: ['6', 'Adult', 'Post Secondary']"
+  `Free Meal Count (K-12)` REAL, -- COMMENT "free meal count for K-12 students. Examples: ['565.0', '186.0', '134.0']"
+  `Enrollment (Ages 5-17)` REAL, -- COMMENT "enrollment count for ages 5 to 17. Examples: ['1070.0', '376.0', '230.0']"
+  `Free Meal Count (Ages 5-17)` REAL, -- COMMENT "free meal count for ages 5-17. Examples: ['553.0', '182.0', '128.0']"
+  `FRPM Count (Ages 5-17)` REAL, -- COMMENT "FRPM count for ages 5-17. Examples: ['702.0', '182.0', '168.0']"
+  PRIMARY KEY (`CDSCode`)
+  FOREIGN KEY (`CDSCode`) REFERENCES schools(`CDSCode`)
+);
+
+CREATE TABLE satscores (
+  `cds` TEXT, -- COMMENT "California Department Schools. Examples: ['10101080000000', '10101080109991', '10101080111682']"
+  `sname` TEXT, -- COMMENT "school name. Matched values: ['Center High', 'The Education Corps', 'Prospect Education Center']"
+  `enroll12` INTEGER, -- COMMENT "enrollment count for grades 1 to 12. Examples: ['398', '62', '75']"
+  PRIMARY KEY (`cds`)
+  FOREIGN KEY (`cds`) REFERENCES schools(`CDSCode`)
+);
+
+CREATE TABLE schools (
+  `CDSCode` TEXT, -- COMMENT "CDSCode. Examples: ['01100170000000', '01100170109835', '01100170112607']"
+  `NCESDist` TEXT, -- COMMENT "NCES school district identification number. Matched values: ['0613360', '0601336']. Examples: ['0691051']"
+  `NCESSchool` TEXT, -- COMMENT "NCES school identification number. Examples: ['10546', '10947', '12283']"
+  `StatusType` TEXT, -- COMMENT "district status type. Matched values: ['Pending', 'Closed', 'Active']"
+  `District` TEXT, -- COMMENT "district identifier. Matched values: ['National Elementary', 'Center Joint Unified', 'Center Joint Elementary']"
+  `School` TEXT, -- COMMENT "school name. Matched values: ['Special Education', 'Special Education Preschool', 'Alternative Education/Independent Study']"
+  `Phone` TEXT, -- COMMENT "phone number. Matched values: ['(559) 233-0706', '(661) 837-6060', '(661) 636-4621']"
+  `Ext` TEXT, -- COMMENT "phone number extension. Examples: ['130', '1240', '1200']"
+  `CharterNum` TEXT, -- COMMENT "charter school number. Matched values: ['0616', '0613', '0610']"
+  `EdOpsCode` TEXT, -- COMMENT "education option type description. Matched values: ['SPECON'(District Consortia Special Education School), 'SPEC'(Special Education School), 'CON'(Continuation School)]"
+  `EdOpsName` TEXT, -- COMMENT "educational option name. Matched values: ['District Special Education Consortia School', 'Special Education School', 'State Special School']"
+  `EILCode` TEXT, -- COMMENT "educational instruction level code. Matched values: ['UG'(Ungraded), 'A'(Adult), 'INTMIDJR'(Intermediate/Middle/Junior High)]"
+  `EILName` TEXT, -- COMMENT "educational instruction level name. Matched values: ['High School', 'Preschool', 'Intermediate/Middle/Junior High']"
+  `GSoffered` TEXT, -- COMMENT "grade span offered. Matched values: ['6-12', '6-10', '6-11']"
+  `GSserved` TEXT, -- COMMENT "grade span served. Matched values: ['6-12', '6-10', '6-11']"
+  PRIMARY KEY (`CDSCode`)
+);
+\end{lstlisting}
+\caption{The DDL semantic context for question 74 on \texttt{california\_schools}.}
+\label{fig:ddl-context}
+\end{figure*}
+
+Schema Linking returns a DDL context in which each recalled table keeps its selected
+columns and primary and foreign keys, and each column comment carries the description,
+sampled values (\texttt{Examples}), and the matched values (\texttt{Matched\ values}). For
+an enumerated column, each matched value takes the form \emph{value (description)}, e.g.,
+\texttt{\textquotesingle UG\textquotesingle} (Ungraded). The example below is the Schema
+Linking output for question~74 of the BIRD development set (difficulty moderate).
+
+\begin{quote}
+\textit{Question.} What is the lowest grade for the District Special Education Consortia
+School with National Center for Educational Statistics school district identification
+number of 0613360?
+\end{quote}
+
+The context in Figure~\ref{fig:ddl-context} recalls the columns the question needs:
+\texttt{Low Grade}, \texttt{NCESDist} (\texttt{0613360}), \texttt{EdOpsCode}, and the
+JOIN key \texttt{CDSCode}. Its foreign key declarations give explicit JOIN evidence
+between \texttt{frpm} and \texttt{schools}, and the matched value
+\texttt{\textquotesingle SPECON\textquotesingle} (District Consortia Special Education
+School) maps District Special Education Consortia School in the question to a filter on
+\texttt{EdOpsCode}.

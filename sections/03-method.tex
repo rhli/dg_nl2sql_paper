@@ -8,7 +8,7 @@ Given a natural-language question $Q$ and a target database $D$, text-to-SQL aim
 to produce a query $S^{*}$ that executes on $D$ and returns the correct result set.
 LLM-based solutions largely adopt a one-fits-all pipeline, applying the same
 procedure to every question and raising accuracy by sampling many SQL candidates for
-selection. This scaling exhibits diminishing returns: accuracy gains flattern as the
+selection. This scaling exhibits diminishing returns: accuracy gains flatten as the
 sample count grows, whereas token and latency costs increase markedly even for simple
 questions. \systemname{} replaces this indiscriminate scaling with two mechanisms:
 difficulty-conditioned dynamic routing and self-evolving validation.
@@ -61,21 +61,99 @@ beneath the panels lists the schema tier, generation paths, and Top-K per diffic
 \subsection{Semantic Modeling}
 \label{sec:semantic-modeling}
 
-\begin{zhoutline}
-\begin{itemize}
-\item 介绍：为避免运行时探查的 token 与时延开销，离线一次性构建 LLM 友好的语义层，包括表列描述、值枚举与向量、JOIN 图与历史 SQL 示例，写入混合检索系统供全库复用。
-\end{itemize}
-\end{zhoutline}
+Enterprise data environments often contain hundreds of tables and hundreds of millions
+of rows. BIRD~\cite{li2023bird}, a benchmark aligned with such environments, operates at
+this scale. Frequent probing of the database and its related semantic corpora during
+inference incurs prohibitive costs in tokens and latency, and adds load to the production
+environment. \systemname{} therefore replaces this probing with an LLM-friendly semantic
+layer built once offline and queried directly.
+
+Semantic modeling builds the semantic layer from four sources: the database schema,
+database description files, sampled column values, and query logs, the last approximated
+in BIRD by the training set's question-SQL pairs. The process extracts table and column
+semantics, including enumerated values and derived metrics, and links tables, columns,
+and JOIN relations into a graph. It also indexes table and column entries, sampled values,
+and few-shot SQL in a vector retrieval system. Together, they form the semantic layer
+queried by Schema Linking during inference.
 
 \subsection{Multi-Path Dynamic Schema Linking}
 \label{sec:schema-linking}
 
-\begin{zhoutline}
+\begin{table*}[t]
+\centering
+\caption{The seven recall paths of Schema Linking.}
+\label{tab:recall-paths}
+\small
+\begin{tabular}{@{}l p{0.66\textwidth}@{}}
+\toprule
+Recall path & Mechanism \\
+\midrule
+Column semantic matching & Vector retrieval over column descriptions, queried by the extracted keywords. \\
+Column LLM matching & LLM selects columns from descriptions, value profiles, and schema relations. \\
+Column-value LSH matching & Lexical retrieval over an LSH index of column values. \\
+Column-value vector matching & Semantic retrieval over a vector index of column values. \\
+Enumerated-value vector matching & Semantic retrieval over a vector index of enumerated value descriptions. \\
+SQL reverse linking & LLM drafts a SQL query and extracts the tables and columns it
+  references. \\
+JOIN graph expansion & Multi-hop traversal of the JOIN graph, adding the tables and foreign keys that
+  connect the recalled tables. \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Schema Linking decides which tables and columns enter the context passed to SQL
+generation, and thus whether generation starts from an accurate scope; it therefore bounds
+attainable accuracy. Improving its precision and recall is a main line of
+text-to-SQL research, from decoupling schema linking~\cite{li2023resdsql} and pruning
+industrial-scale schemas~\cite{talaei2024chess} to bidirectional
+linking~\cite{cao2024rslsql}, all relying on a static strategy. \systemname{} instead
+implements a dynamic seven-path recall pipeline (Table~\ref{tab:recall-paths}), each
+path switchable independently; their on/off configuration sets the recall--precision
+trade-off of the output context and is adjusted online to the question difficulty. It
+begins with a Perceptor that parses the question into keywords for table and column
+matching.
+
+Among the seven recall paths, SQL reverse linking warrants additional explanation. It
+follows from how LLMs are trained: pretraining corpora are rich in SQL generation but
+rarely annotate schema linking, so LLM-based direct matching lacks support, whereas
+drafting a SQL query and parsing its references matches the training distribution. The
+path therefore complements the direct-matching paths, recovering the columns they miss
+(Section~\ref{sec:exp-schema-linking}), and its drafted SQL serves as the difficulty probe
+of Section~\ref{sec:generation}.
+
+We enumerate all non-empty on/off combinations of the seven paths on the BIRD
+development set, obtaining $2^{7}-1=127$ configurations, and rank them by Strict Column
+Recall, the fraction of questions for which all ground-truth columns are recalled, with
+Micro Precision as the tie-breaker. Reading this ranking along the recall--precision
+trade-off, we select three representative tiers plus a fallback:
+
+\begingroup
+\setlength{\topsep}{6pt}
+\setlength{\partopsep}{0pt}
 \begin{itemize}
-\item 介绍：七条互补召回回路（列名语义、列名 LLM、列值 LSH、枚举值语义、列值向量、SQL 反向提取、JOIN 图扩展），召回前由 Perceptor 拆词并区分 fuzz-match 与 evidence-match。
-\item 实验依据：在 Dev 上做 127 种开关组合的排列实验，提炼 Recall-first、Balanced、Precision-first 三档，外加 Full-schema 兜底；召回结果统一组织为 DDL 语义格式。
+  \setlength{\itemsep}{1pt}
+  \setlength{\parsep}{0pt}
+  \item \textbf{Recall-first} enables all seven paths, favoring recall at the cost of
+    context size.
+  \item \textbf{Balanced} disables enumerated-value vector matching and JOIN graph expansion,
+    the two most redundant paths.
+  \item \textbf{Precision-first} retains only column LLM matching and SQL reverse linking,
+    sacrificing join and value coverage.
+  \item \textbf{Full-schema} keeps every table and column, bypassing all paths as the
+    fallback.
 \end{itemize}
-\end{zhoutline}
+\endgroup
+
+The per-configuration and per-tier recall and precision of these tiers are reported in
+Section~\ref{sec:exp-schema-linking}. The applicable tier is chosen per question by the
+difficulty probe $d(Q)$ (Section~\ref{sec:generation}), so that the same seven-path
+pipeline yields a leaner or a richer schema context as the question difficulty varies.
+
+That context is then rendered in a DDL semantic format (Appendix~\ref{app:ddl}):
+\texttt{CREATE TABLE} statements preserve the schema structure, primary and foreign key
+constraints declare JOIN hints explicitly, and column comments embed descriptions, value
+samples (\texttt{Examples}), and matched enumerated values with explanation
+(\texttt{Matched values}), enabling the LLM to interpret the schema more completely.
 
 \subsection{Difficulty-Routed Multi-Path Generation}
 \label{sec:generation}
