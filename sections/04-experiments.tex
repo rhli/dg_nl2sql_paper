@@ -4,7 +4,7 @@
 \begin{zhoutline}
 \textit{Placeholder outline in Chinese; to be rewritten in English.}
 
-设置：BIRD 基准，主结果取 Test 榜单，其余实验在 Dev 1534 题上完成；生成端统一 GLM-5.2，召回指标由 DeepSeek-V4-flash 产出；准确率以 EX 计，前置环节用召回指标、Oracle Q\% 与 Top-1 衡量；各节按控制变量设计，一次只变一个组件。
+设置：BIRD 基准，主结果取 Test 榜单，其余实验在 Dev 1534 题上完成；生成端统一 GLM-5.2，召回指标由 DeepSeek-V4-flash 产出；准确率以 EX 计，前置环节用召回指标、Oracle Q\% 与 Top-1 衡量；各节按控制变量设计，一次只变一个组件。生成参数：阶段一每路径 $m=3$、阶段二上限 $n=5$，以 moderate 为例初始 $4\times m=12$ 个候选、未提前终止时扩至 $4\times n=20$ 个。
 
 研究问题：RQ1 相对 SOTA 的表现，RQ2 各模块贡献，RQ3 各召回回路与档位，RQ4 固定路由下多回路生成，RQ5 自演进校验链，RQ6 Top-K 对选择精度的影响。
 \end{zhoutline}

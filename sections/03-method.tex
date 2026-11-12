@@ -125,7 +125,7 @@ We enumerate all non-empty on/off combinations of the seven paths on the BIRD
 development set, obtaining $2^{7}-1=127$ configurations, and rank them by Strict Column
 Recall, the fraction of questions for which all ground-truth columns are recalled, with
 Micro Precision as the tie-breaker. Reading this ranking along the recall--precision
-trade-off, we select three representative tiers plus a fallback:
+trade-off, we select three representative tiers plus a full-schema fallback:
 
 \begingroup
 \setlength{\topsep}{6pt}
@@ -135,8 +135,8 @@ trade-off, we select three representative tiers plus a fallback:
   \setlength{\parsep}{0pt}
   \item \textbf{Recall-first} enables all seven paths, favoring recall at the cost of
     context size.
-  \item \textbf{Balanced} disables enumerated-value vector matching and JOIN graph expansion,
-    the two most redundant paths.
+  \item \textbf{Balanced} disables enumerated-value vector matching and JOIN graph
+    expansion, the two most redundant paths.
   \item \textbf{Precision-first} retains only column LLM matching and SQL reverse linking,
     sacrificing join and value coverage.
   \item \textbf{Full-schema} keeps every table and column, bypassing all paths as the
@@ -155,16 +155,129 @@ constraints declare JOIN hints explicitly, and column comments embed description
 samples (\texttt{Examples}), and matched enumerated values with explanation
 (\texttt{Matched values}), enabling the LLM to interpret the schema more completely.
 
-\subsection{Difficulty-Routed Multi-Path Generation}
+\subsection{Difficulty-Conditioned Multi-Path Generation}
 \label{sec:generation}
 
-\begin{zhoutline}
-\begin{itemize}
-\item 介绍：四条异构回路（ICL、分治、骨架、自由探索），借鉴 N-version programming，多样性来自推理范式而非同一过程的多次采样。
-\item 公式（式 1）：难度映射为「schema 档位 + 回路集合」二元组；难度信号可取数据集标注或草稿 SQL 的结构复杂度。
-\item 算法（算法 2）：两阶段生成，阶段一每路 3 条且结果一致即短路，否则补齐至 5 条。
-\end{itemize}
-\end{zhoutline}
+SQL generation follows the N-version programming principle~\cite{chen1978nversion}:
+the four paths act as independent versions that solve the same question $Q$ with
+optional evidence $E$, and they pool their outputs for selection. Diversity therefore
+stems from the paths rather than from repeatedly sampling a single path, as
+self-consistency does~\cite{wang2023selfconsistency}. Table~\ref{tab:generation} lists
+the four paths, which guide SQL generation through different reasoning strategies: the
+first three follow in-context learning, recursive decomposition (as in least-to-most
+prompting~\cite{zhou2023leasttomost}), and skeleton-first generation, whereas free
+exploration leaves the reasoning strategy unconstrained and serves as the fallback path.
+
+\begin{table*}[t]
+\centering
+\caption{Generation paths (top) and difficulty-conditioned routing (bottom).}
+\label{tab:generation}
+\small
+\begin{tabular}{@{}l l p{0.56\textwidth}@{}}
+\toprule
+Path & Notation & Reasoning strategy \\
+\midrule
+Few-shot ICL & $r_\text{icl}$ & Guides the LLM to learn SQL structure and semantic
+  mapping from cross-domain question--SQL demonstrations. \\
+Divide-and-conquer & $r_\text{dc}$ & Recursively decomposes the question, solves each part,
+  and assembles them bottom-up. \\
+Skeleton-first & $r_\text{skel}$ & Drafts the clause skeleton, then fills its slots with
+  schema elements, literals, and operators. \\
+Free exploration & $r_\text{free}$ & Leaves the reasoning strategy unconstrained and serves as
+  the fallback path. \\
+\bottomrule
+\end{tabular}
+
+\vspace{5pt}
+\begin{tabular}{@{}l l l@{}}
+\toprule
+Difficulty $d(Q)$ & Schema tier $\mathrm{Sch}(Q)$ & Active paths $\mathcal{R}(Q)$ \\
+\midrule
+simple & Precision-first & $\{r_\text{icl}, r_\text{dc}, r_\text{skel}\}$ \\
+moderate & Balanced & $\{r_\text{icl}, r_\text{dc}, r_\text{skel}, r_\text{free}\}$ \\
+challenging & Recall-first & $\{r_\text{dc}, r_\text{skel}\}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+To maximize SQL generation accuracy, \systemname{} configures the active paths and the
+schema context per question, driven by a difficulty probe $d(Q)$ whose value is one of
+\emph{simple}, \emph{moderate}, and \emph{challenging}. The probe has two interchangeable
+sources: the labels released with the benchmark, and a structural probe computed from the
+draft SQL of SQL reverse linking (Section~\ref{sec:schema-linking}). The latter applies
+Spider's hardness criteria~\cite{yu2018spider}, counting query components, nesting depth,
+explicit joins, and aggregate or set operations. Both yield comparable routing decisions
+on the BIRD development set; since BIRD annotates every question, all BIRD evaluations in
+this paper use the benchmark labels.
+
+Given $d(Q)$, routing assigns each question a schema tier $\mathrm{Sch}(Q)$ and an active
+path set $\mathcal{R}(Q)$ (Table~\ref{tab:generation}, bottom); each active path then
+receives its own schema:
+\begin{equation}
+\mathrm{Sch}_r =
+\underbrace{
+\begin{cases}
+\text{Full-schema}, & r = r_\text{free},\\
+\mathrm{Sch}(Q), & \text{otherwise},
+\end{cases}
+}_{\mathrm{PathSchema}(r,\,\mathrm{Sch}(Q))}
+\tag{1}
+\end{equation}
+where $\mathrm{Sch}(Q)$ is the question-level context returned by Schema Linking
+(Section~\ref{sec:schema-linking}).
+
+These assignments derive from per-difficulty combination studies of the recall and
+generation paths (Sections~\ref{sec:exp-schema-linking} and~\ref{sec:exp-generation}).
+Simple questions need a precision-leaning schema and only three reasoning-guided paths,
+keeping a compact SQL candidate pool with the correct SQL concentrated for easy selection.
+Moderate questions balance schema precision against recall and add free exploration,
+raising the accuracy ceiling of the pool. Challenging questions favor schema recall yet
+run only divide-and-conquer and skeleton-first, removing the noise of the other two
+paths. The routing thus maximizes generation accuracy and candidate pool purity for each
+difficulty, which benefits the subsequent Selector.
+
+To bound token consumption and latency, the pool grows in two stages with per-path
+budgets $m$ and $n$, and the second stage is invoked only when needed. In stage one, each
+active path produces $m$ candidates, and only those that pass validation enter
+$\mathcal{C}$. The Single check then tests whether all pooled candidates execute to the
+same result set. This early exit mirrors adaptive
+stopping~\cite{aggarwal2023adaptiveconsistency}, with executable result equivalence
+replacing answer voting as the stability criterion. If the check fails, stage two extends
+every path to $n$ candidates under the same validation.
+
+\begin{algorithm}[t]
+\caption{Difficulty-routed two-stage generation.}
+\label{alg:generation}
+\begin{algorithmic}[1]
+\Require $Q$, $E$, $d(Q)$; $m$, $n$ ($m < n$)
+\Ensure validated pool $\mathcal{C}$
+\State $(\mathit{tier}, \mathcal{R}) \gets \mathrm{Route}(d(Q))$
+\State $\mathrm{Sch}(Q) \gets \mathrm{Link}(Q, E, \mathit{tier})$
+\State $\mathcal{C} \gets \emptyset$
+\For{$r \in \mathcal{R}$} \Comment{stage one}
+  \State $\mathrm{Sch}_r \gets \mathrm{PathSchema}(r, \mathrm{Sch}(Q))$
+  \For{$i = 1$ to $m$}
+    \State $s \gets \mathrm{Validate}(\mathrm{Gen}_r(Q, E, \mathrm{Sch}_r))$
+    \If{$\mathrm{Valid}(s)$}
+      \State $\mathcal{C} \gets \mathcal{C} \cup \{(s, r)\}$
+    \EndIf
+  \EndFor
+\EndFor
+\If{$\mathcal{C} \neq \emptyset$ \textbf{and} $\mathrm{Single}(\mathcal{C})$}
+  \State \Return $\mathcal{C}$
+\EndIf
+\For{$r \in \mathcal{R}$} \Comment{stage two}
+  \State $\mathrm{Sch}_r \gets \mathrm{PathSchema}(r, \mathrm{Sch}(Q))$
+  \For{$i = m+1$ to $n$}
+    \State $s \gets \mathrm{Validate}(\mathrm{Gen}_r(Q, E, \mathrm{Sch}_r))$
+    \If{$\mathrm{Valid}(s)$}
+      \State $\mathcal{C} \gets \mathcal{C} \cup \{(s, r)\}$
+    \EndIf
+  \EndFor
+\EndFor
+\State \Return $\mathcal{C}$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Self-Evolving Validator Chain}
 \label{sec:validator}

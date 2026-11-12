@@ -33,6 +33,12 @@
 
 \newcommand{\systemname}{DataGallery-Text2SQL}
 
+% Pseudo-code for the generation and validation algorithms. acmart already
+% defines \Bbbk, which algpseudocode would otherwise redefine.
+\let\Bbbk\relax
+\usepackage{algpseudocode}
+\usepackage{algorithm}
+
 % 草稿期的中文占位大纲；定稿前删除本段并移除各节的 zhoutline 环境。
 \usepackage{CJKutf8}
 \newenvironment{zhoutline}{%
